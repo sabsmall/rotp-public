@@ -23,6 +23,7 @@ import java.awt.LinearGradientPaint;
 import java.awt.Polygon;
 import java.awt.Rectangle;
 import java.awt.Shape;
+import java.awt.BasicStroke;
 import java.awt.Stroke;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -50,6 +51,79 @@ import rotp.ui.main.SystemPanel;
 
 public final class RacesIntelligenceUI extends BasePanel implements MouseListener, MouseMotionListener, MouseWheelListener {
     private static final long serialVersionUID = 1L;
+
+    // --GEN-init-------------------------------
+
+    private final RacesUI parent;
+    private final ManageSpiesUI manageSpiesPane;
+
+    public RacesIntelligenceUI(RacesUI p) {
+        parent = p;
+        manageSpiesPane = new ManageSpiesUI(p);
+        initModel();
+    }
+
+    public void init() {
+        setValues();
+        gatherStarterTechs();
+    }
+    private void initModel() {
+        for (int i=0;i<techBoxes.length;i++) 
+            techBoxes[i] = new Rectangle();
+        for (int i=0;i<techScrollers.length;i++) 
+            techScrollers[i] = new Rectangle();
+        
+        setBackground(RacesUI.darkerBrown);
+        setBorder(newEmptyBorder(5,5,5,5));
+        addMouseMotionListener(this);
+        addMouseListener(this);
+        addMouseWheelListener(this);        
+    }
+    private void gatherStarterTechs () {
+        starterTechs.clear();
+        TechTree plTree = player().tech();
+        for (int i=0;i<TechTree.NUM_CATEGORIES;i++) {
+            List<String> playerTechsCat = new ArrayList<>(plTree.category(i).knownTechs());
+            List<String> starterTechsCat = new ArrayList<>();
+
+            for (String id : playerTechsCat) {
+                Tech t = tech(id);
+                if ((t.level() == 0) || t.free)
+                    starterTechsCat.add(id);
+            }
+            Collections.sort(starterTechsCat, Tech.REVERSE_LEVEL);
+            starterTechs.put(i, starterTechsCat);
+        }        
+    }
+
+    // --GEN-upd--------------------------------
+
+    private boolean inRange = false;
+
+    public void changedEmpire()     { setValues(); }
+    private void setValues() {
+        for (int i=0; i<techY.length; i++)
+            techY[i] = 0;
+        
+        Empire pl = player();
+        
+        inRange = pl.inRangeOfAnyEmpire();
+        if (parent.selectedEmpire().isPlayer()) {
+            internalSecurityCost = pl.empireInternalSecurityCost();
+            externalSpyingCost = pl.empireExternalSpyingCost();
+        }
+        else {
+            EmpireView view = pl.viewForEmpire(parent.selectedEmpire());
+            externalSpyingCost = pl.totalTaxablePlanetaryProduction() * view.spies().allocationCostPct() * view.owner().spySpendingModifier();
+        }
+        loadTechMaps();
+    }
+
+    // --GEN-draw-------------------------------
+
+    Shape hoverShape;
+    private LinearGradientPaint backGradient;
+
     static Color sliderC = new Color(34,140,142);
     static Color sliderButtonC = new Color(153,0,11);
     static Color sliderButtonHiC = new Color(199,199,11);
@@ -57,51 +131,14 @@ public final class RacesIntelligenceUI extends BasePanel implements MouseListene
     private static final Color unselectedC = new Color(112,85,68);
     static final Color sliderBoxBlue = new Color(34,140,142);
 
-    private final RacesUI parent;
-    private final ManageSpiesUI manageSpiesPane;
-    private float internalSecurityCost = 0;
-    private float externalSpyingCost = 0;
-    private boolean inRange = false;
-
-    private final Polygon spyMaxIncr = new Polygon();
-    private final Polygon spyMaxDecr = new Polygon();
-    private final Polygon buttonIncr = new Polygon();
-    private final Polygon buttonDecr = new Polygon();
-    private final Polygon missionIncr = new Polygon();
-    private final Polygon missionDecr = new Polygon();
-    Rectangle buttonSlider = new Rectangle();
-    Shape hoverShape;
     int dragY;
     int[] ptX = new int[3];
     int[] ptY = new int[3];
-    
-    int[] techY = new int[6];
-    int[] techYMax = new int[6];
-    Rectangle[] techBoxes = new Rectangle[6];
-    Rectangle[] techScrollers = new Rectangle[6];
-    
-    private final Rectangle manageSpiesBox = new Rectangle();
-    private final Rectangle spyMissionBox = new Rectangle();
-    private final Rectangle maxSpyBox = new Rectangle();
-    
-    private final HashMap<Integer, List<String>> knownTechs = new HashMap<>();
-    private final HashMap<Integer, List<String>> unknownTechs = new HashMap<>();
-    private final HashMap<String, List<Empire>> techOwners = new HashMap<>();
 
-    private LinearGradientPaint backGradient;
-    public RacesIntelligenceUI(RacesUI p) {
-        parent = p;
-        manageSpiesPane = new ManageSpiesUI(p);
-        initModel();
-    }
-    public void init() {
-        setValues();
-    }
-    @Override
-    public void drawTexture(Graphics g)      { }
     @Override
     public String textureName()     { return TEXTURE_BROWN; }
-    public void changedEmpire()     { setValues(); }
+    @Override
+    public void drawTexture(Graphics g)      { }
     @Override
     public void paintComponent(Graphics g0) {
         super.paintComponent(g0);
@@ -123,18 +160,7 @@ public final class RacesIntelligenceUI extends BasePanel implements MouseListene
         else
             paintAIData(g);
     }
-    private void initModel() {
-        for (int i=0;i<techBoxes.length;i++) 
-            techBoxes[i] = new Rectangle();
-        for (int i=0;i<techScrollers.length;i++) 
-            techScrollers[i] = new Rectangle();
-        
-        setBackground(RacesUI.darkerBrown);
-        setBorder(newEmptyBorder(5,5,5,5));
-        addMouseMotionListener(this);
-        addMouseListener(this);
-        addMouseWheelListener(this);        
-    }
+
     private void paintPlayerData(Graphics2D g) {
         // ai data only buttons - clear them
         missionDecr.reset();
@@ -180,6 +206,366 @@ public final class RacesIntelligenceUI extends BasePanel implements MouseListene
         drawRaceIcon(g, emp, s60, s30, s200, s200);
         drawIntelTitle(g, emp, s260, s30, s370, s50);
     }
+ 
+    // --TECH-upd-------------------------------
+
+    int[] techY = new int[6];
+    int[] techYMax = new int[6];
+    
+    private final HashMap<Integer, List<String>> starterTechs = new HashMap<>();
+    private final HashMap<Integer, List<String>> allKnownTechs = new HashMap<>();
+    private final HashMap<Integer, List<String>> plUnkwnTechs = new HashMap<>();
+    private final HashMap<Integer, List<String>> aiUnkwnTechs = new HashMap<>();
+    private final HashMap<String, List<Empire>> techOwners = new HashMap<>();
+
+    private void loadTechMaps() {
+        allKnownTechs.clear();
+        plUnkwnTechs.clear();
+        aiUnkwnTechs.clear();
+        techOwners.clear();
+        Empire emp = parent.selectedEmpire();
+        if (emp.isPlayer()) 
+            loadAllUnknownTechs();
+        else
+            loadAllTechs(emp);
+    }
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private void loadAllUnknownTechs() {
+        for (int i=0;i<TechTree.NUM_CATEGORIES;i++) {
+            plUnkwnTechs.put(i, new ArrayList<>());
+            aiUnkwnTechs.put(i, new ArrayList<>());
+        }
+        Empire pl = player();
+        TechTree plTree = pl.tech();
+        List<String> tradedTechs = new ArrayList<>();
+        for (String techId: pl.tech().tradedTechs())
+            tradedTechs.add(techId);
+        List<Empire> empires = pl.contactedEmpires();
+        for (Empire emp: empires) {
+            TechTree empTree = pl.viewForEmpire(emp).spies().tech();
+            for (int i=0;i<TechTree.NUM_CATEGORIES;i++) {
+                List<String> aiTechs = new ArrayList<>(empTree.category(i).knownTechs());
+                List<String> plTechs = new ArrayList<>(plTree.category(i).knownTechs());
+                aiTechs.removeAll(plTechs);
+                for (String id : aiTechs) {
+                    List<String> currUnknowns = aiUnkwnTechs.get(i);
+                    if (!currUnknowns.contains(id) && !tradedTechs.contains(id))
+                        currUnknowns.add(id);
+                    if (!techOwners.containsKey(id))
+                        techOwners.put(id, new ArrayList<>());
+                    techOwners.get(id).add(emp);
+                }
+            }        
+        }
+    }
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private void loadAllTechs(Empire emp) {
+        Empire pl = player();
+        
+        TechTree plTree = pl.tech();
+        TechTree aiTree = pl.viewForEmpire(emp).spies().tech();
+        List<String> tradedTechs = new ArrayList<>();
+        for (String techId: pl.tech().tradedTechs())
+            tradedTechs.add(techId);
+
+        for (int i=0;i<TechTree.NUM_CATEGORIES;i++) {
+            List<String> aiKnown = new ArrayList<>(aiTree.category(i).knownTechs());
+            aiKnown.removeAll(starterTechs.get(i));
+
+            List<String> plKnown = new ArrayList<>(plTree.category(i).knownTechs());
+            plKnown.removeAll(starterTechs.get(i));
+
+            List<String> plUnkwn = new ArrayList<>();
+            for (String id : aiKnown)
+                if (!plKnown.contains(id) && !tradedTechs.contains(id))
+                    plUnkwn.add(id);
+
+            List<String> aiUnkwn = new ArrayList<>();
+            for (String id : plKnown)
+                if (!aiKnown.contains(id))
+                    aiUnkwn.add(id);
+            
+            aiKnown.addAll(aiUnkwn);
+
+            Collections.sort(aiKnown, Tech.REVERSE_LEVEL);
+            Collections.sort(aiUnkwn, Tech.REVERSE_LEVEL);
+            Collections.sort(plUnkwn, Tech.REVERSE_LEVEL);
+
+            allKnownTechs.put(i, aiKnown);
+            aiUnkwnTechs.put(i, aiUnkwn);
+            plUnkwnTechs.put(i, plUnkwn);
+        }
+    }
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // --TECH-draw------------------------------
+
+    Rectangle[] techBoxes = new Rectangle[6];
+    Rectangle[] techScrollers = new Rectangle[6];
+
+    private void drawTechnologyTitle(Graphics2D g, Empire emp, int x, int y, int w, int h) {
+        g.setColor(SystemPanel.orangeText);
+        g.setFont(narrowFont(30));
+        String title = emp.isPlayer() ? text("RACES_INTEL_UNKNOWN_TECHNOLOGY") : text("RACES_INTEL_KNOWN_TECHNOLOGY");
+        title = emp.replaceTokens(title, "alien");
+        int sw = g.getFontMetrics().stringWidth(title);
+        int y1 = y + h - s5;
+        int x1 = x+s20;
+        drawString(g,title, x1, y1);
+        
+        // don't draw the spy informational message for your New Republic allies
+        if (emp.isAI()) {
+            EmpireView v = player().viewForEmpire(emp);
+            if (v.embassy().unity())
+                return;
+        }
+        
+        int x2 = x1+sw+s40;
+        int w2 = x+w-x2-s40;
+        int y2 = y1 - s10;
+        String desc = emp.isPlayer() ? text("RACES_INTEL_UNKNOWN_TECH_DESC") : text("RACES_INTEL_KNOWN_TECH_DESC");
+        desc = emp.replaceTokens(desc, "alien");
+        g.setColor(SystemPanel.whiteText);
+        int fontSize = 15;
+        g.setFont(narrowFont(fontSize));
+        List<String> lines = this.wrappedLines(g, desc, w2);
+        while ((lines.size() > 2) && (fontSize > 10)) {
+            fontSize--;
+            g.setFont(narrowFont(fontSize));
+            lines = this.wrappedLines(g, desc, w2);
+        }
+        if (lines.size() == 1)
+            y2 += s8;
+        for (String line: lines) {
+            drawString(g,line, x2, y2);
+            y2 += s16;
+        }
+    }
+    private void drawUnknownTechnologyLists(Graphics2D g, Empire emp, int x, int y, int w, int h) {
+        g.setColor(RacesUI.darkBrown);
+        g.fillRect(x, y, w, h);
+        int w1 = (w-s20)/3;
+        int h1 = h/2;
+        
+        int x1 = x+s10;
+        int x2 = x1+w1;
+        int x3 = x2+w1;
+        int y1 = y;
+        int y2 = y+h1;
+        
+        Empire pl = player();
+        TechTree tree = emp == pl ? pl.tech() : pl.viewForEmpire(emp).spies().tech();
+        drawJnknownTechCategory(g, emp, tree.computer(),    0, x1, y1, w1, h1);
+        drawJnknownTechCategory(g, emp, tree.construction(),1, x2, y1, w1, h1);
+        drawJnknownTechCategory(g, emp, tree.forceField(),  2, x3, y1, w1, h1);
+        drawJnknownTechCategory(g, emp, tree.planetology(), 3, x1, y2, w1, h1);
+        drawJnknownTechCategory(g, emp, tree.propulsion(),  4, x2, y2, w1, h1);
+        drawJnknownTechCategory(g, emp, tree.weapon(),      5, x3, y2, w1, h1);   
+    }
+    private void drawTechnologyLists(Graphics2D g, Empire emp, int x, int y, int w, int h) {
+        g.setColor(RacesUI.darkBrown);
+        g.fillRect(x, y, w, h);
+        int w1 = (w-s20)/3;
+        int h1 = h/2;
+        
+        int x1 = x+s10;
+        int x2 = x1+w1;
+        int x3 = x2+w1;
+        int y1 = y;
+        int y2 = y+h1;
+        
+        Empire pl = player();
+        TechTree tree = emp == pl ? pl.tech() : pl.viewForEmpire(emp).spies().tech();
+        drawTechCategory(g, emp, tree.computer(),    0, x1, y1, w1, h1);
+        drawTechCategory(g, emp, tree.construction(),1, x2, y1, w1, h1);
+        drawTechCategory(g, emp, tree.forceField(),  2, x3, y1, w1, h1);
+        drawTechCategory(g, emp, tree.planetology(), 3, x1, y2, w1, h1);
+        drawTechCategory(g, emp, tree.propulsion(),  4, x2, y2, w1, h1);
+        drawTechCategory(g, emp, tree.weapon(),      5, x3, y2, w1, h1);   
+    }
+    private void drawTechCategory(Graphics2D g, Empire emp, TechCategory cat, int num, int x, int y, int w, int h) {
+        g.setColor(SystemPanel.whiteText);
+        g.setFont(narrowFont(24));
+        String title = text(cat.id());
+        int sw = g.getFontMetrics().stringWidth(title);
+        int x0 = x+((w-sw)/2);
+        int y0 = y+s25;
+        drawShadowedString(g, title, 1, x0, y0, SystemPanel.blackText, SystemPanel.whiteText);
+    
+        int y1 = y0+s10;
+        int x1 = x+s10;
+        int w1 = w-s20;
+        int listH = y+h-y1-s10;
+        
+        g.setColor(RacesUI.brown);
+        g.fillRect(x1,y1,w1,listH);
+        
+        techBoxes[num].setBounds(x1,y1,w1,listH);
+        if (techBoxes[num] == hoverShape) {
+            Stroke prev = g.getStroke();
+            g.setStroke(stroke2);
+            g.setColor(Color.yellow);
+            g.draw(techBoxes[num]);
+            g.setStroke(prev);
+        }
+        List<String> allKnown = allKnownTechs.get(cat.index());
+        List<String> aiUnkwn = aiUnkwnTechs.get(cat.index());
+        List<String> plUnkwn = plUnkwnTechs.get(cat.index());
+        
+        int rowH = s16;
+        int x2 = x1+s10;
+        int y2 = y1-techY[num];
+        g.setFont(narrowFont(15));
+        g.setClip(x1+s1,y1+s1,w1-s1,listH-s2);
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        int rows = 0;
+        int currRung = 21;
+        int prevRung = 0;
+
+        for (String id: allKnown) {
+            prevRung = currRung;
+            currRung = ((tech(id).level().intValue()-1) / 5) + 1;
+            if (currRung < prevRung ) {
+                if (prevRung != 21) {
+                    Stroke prevStroke = g.getStroke();
+                    g.setColor(Color.black);
+                    g.setStroke(stroke1);
+                    g.drawLine(x2, y2+s3, x2+w1-s30, y2+s3);
+                    g.setStroke(prevStroke);
+                }
+
+                g.setColor(SystemPanel.blackText);
+                int indent = 0;
+                if (currRung > 9) indent += s7;
+                drawString(g, "" + currRung, x2+w1-s37-indent, y2+rowH);
+            }
+            y2 += rowH;
+            rows++;
+            if (aiUnkwn.contains(id))
+                g.setColor(SystemPanel.grassGreenText);
+            else if (plUnkwn.contains(id))
+                g.setColor(SystemPanel.redText);
+            else 
+                g.setColor(SystemPanel.blackText);
+            drawString(g,tech(id).name(), x2, y2);
+        }
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        techYMax[num] = max(0, s21+(rowH*rows) - listH);
+        if (techYMax[num] == 0) 
+            techScrollers[num].setBounds(0,0,0,0);
+        else {
+            g.setColor(RacesUI.scrollBarC);
+            int scrollW = s12;
+            int scrollH = (int) ((float)listH*listH/(listH+techYMax[num]));
+            int scrollX = x1+w1-scrollW-s2;
+            int scrollY =(int) (y1+ (float)listH*techY[num]/(techYMax[num]+listH));
+            g.fillRoundRect(scrollX, scrollY, scrollW, scrollH, s4, s4);
+            techScrollers[num].setBounds(scrollX, scrollY, scrollW, scrollH);
+            if (hoverShape == techScrollers[num]) {
+                Stroke prev = g.getStroke();
+                g.setColor(Color.yellow);
+                g.setStroke(stroke2);
+                g.drawRoundRect(scrollX, scrollY, scrollW, scrollH, s4, s4);
+                g.setStroke(prev);
+            }
+        }
+        g.setClip(null);
+    }
+    private void drawJnknownTechCategory(Graphics2D g, Empire emp, TechCategory cat, int num, int x, int y, int w, int h) {
+        g.setColor(SystemPanel.whiteText);
+        g.setFont(narrowFont(24));
+        String title = text(cat.id());
+        int sw = g.getFontMetrics().stringWidth(title);
+        int x0 = x+((w-sw)/2);
+        int y0 = y+s25;
+        drawShadowedString(g, title, 1, x0, y0, SystemPanel.blackText, SystemPanel.whiteText);
+    
+        int y1 = y0+s10;
+        int x1 = x+s10;
+        int w1 = w-s20;
+        int listH = y+h-y1-s10;
+        
+        g.setColor(RacesUI.brown);
+        g.fillRect(x1,y1,w1,listH);
+        
+        techBoxes[num].setBounds(x1,y1,w1,listH);
+        if (techBoxes[num] == hoverShape) {
+            Stroke prev = g.getStroke();
+            g.setStroke(stroke2);
+            g.setColor(Color.yellow);
+            g.draw(techBoxes[num]);
+            g.setStroke(prev);
+        }
+        
+        List<String> aiUnkwnCat = aiUnkwnTechs.get(cat.index());
+        int rowH = s16;
+        int x2 = x1+s10;
+        int y2 = y1-techY[num];
+        g.setFont(narrowFont(15));
+        g.setClip(x1+s1,y1+s1,w1-s1,listH-s2);
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        g.setColor(SystemPanel.orangeText);
+        int rows = 0;
+        for (String id: aiUnkwnCat) {
+            Tech t = tech(id);
+            if ((t.level() > 0) && !t.free) {
+                y2 += rowH;
+                rows++;
+                String s = tech(id).name();
+                drawString(g,s, x2, y2);
+                int sw1 = g.getFontMetrics().stringWidth(s)+s5;
+                List<Empire> emps = techOwners.get(id);
+                int x3 = x2 + sw1;
+                g.setColor(SystemPanel.blackText);
+                for (Empire emp1: emps) {
+                    s = emp1.raceName();
+                    sw1 = g.getFontMetrics().stringWidth(s)+s5;
+                    drawString(g,s, x3, y2);
+                    x3 += sw1;
+                }
+                g.setColor(SystemPanel.orangeText);
+            }
+        }
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        techYMax[num] = max(0, s21+(rowH*rows) - listH);
+        if (techYMax[num] == 0) 
+            techScrollers[num].setBounds(0,0,0,0);
+        else {
+            g.setColor(RacesUI.scrollBarC);
+            int scrollW = s12;
+            int scrollH = (int) ((float)listH*listH/(listH+techYMax[num]));
+            int scrollX = x1+w1-scrollW-s2;
+            int scrollY =(int) (y1+ (float)listH*techY[num]/(techYMax[num]+listH));
+            g.fillRoundRect(scrollX, scrollY, scrollW, scrollH, s4, s4);
+            techScrollers[num].setBounds(scrollX, scrollY, scrollW, scrollH);
+            if (hoverShape == techScrollers[num]) {
+                Stroke prev = g.getStroke();
+                g.setColor(Color.yellow);
+                g.setStroke(stroke2);
+                g.drawRoundRect(scrollX, scrollY, scrollW, scrollH, s4, s4);
+                g.setStroke(prev);
+            }
+        }
+        g.setClip(null);
+    }
+
+    // --HEAD-upd+draw--------------------------
+
+    private float internalSecurityCost = 0;
+    private float externalSpyingCost = 0;
+
+    private final Rectangle manageSpiesBox = new Rectangle();
+    private final Rectangle spyMissionBox = new Rectangle();
+    private final Rectangle maxSpyBox = new Rectangle();
+    Rectangle buttonSlider = new Rectangle();
+
+    private final Polygon spyMaxIncr = new Polygon();
+    private final Polygon spyMaxDecr = new Polygon();
+    private final Polygon buttonIncr = new Polygon();
+    private final Polygon buttonDecr = new Polygon();
+    private final Polygon missionIncr = new Polygon();
+    private final Polygon missionDecr = new Polygon();
+   
     private void drawRaceIconBase(Graphics2D g, Empire emp, int x, int y, int w, int h) {
         g.setColor(RacesUI.darkBrown);
         Shape rect = new RoundRectangle2D.Float(x,y,w,h,w/8, h/8);
@@ -390,234 +776,6 @@ public final class RacesIntelligenceUI extends BasePanel implements MouseListene
             int sliderH = s16;
             drawSecuritySliderBar(g,x+w-s50-sw-sliderW, y3-sliderH+s3, sliderW, sliderH);
         }
-    }
-    private void drawTechnologyTitle(Graphics2D g, Empire emp, int x, int y, int w, int h) {
-        g.setColor(SystemPanel.orangeText);
-        g.setFont(narrowFont(30));
-        String title = emp.isPlayer() ? text("RACES_INTEL_UNKNOWN_TECHNOLOGY") : text("RACES_INTEL_KNOWN_TECHNOLOGY");
-        title = emp.replaceTokens(title, "alien");
-        int sw = g.getFontMetrics().stringWidth(title);
-        int y1 = y + h - s5;
-        int x1 = x+s20;
-        drawString(g,title, x1, y1);
-        
-        // don't draw the spy informational message for your New Republic allies
-        if (emp.isAI()) {
-            EmpireView v = player().viewForEmpire(emp);
-            if (v.embassy().unity())
-                return;
-        }
-        
-        int x2 = x1+sw+s40;
-        int w2 = x+w-x2-s40;
-        int y2 = y1 - s10;
-        String desc = emp.isPlayer() ? text("RACES_INTEL_UNKNOWN_TECH_DESC") : text("RACES_INTEL_KNOWN_TECH_DESC");
-        desc = emp.replaceTokens(desc, "alien");
-        g.setColor(SystemPanel.whiteText);
-        int fontSize = 15;
-        g.setFont(narrowFont(fontSize));
-        List<String> lines = this.wrappedLines(g, desc, w2);
-        while ((lines.size() > 2) && (fontSize > 10)) {
-            fontSize--;
-            g.setFont(narrowFont(fontSize));
-            lines = this.wrappedLines(g, desc, w2);
-        }
-        if (lines.size() == 1)
-            y2 += s8;
-        for (String line: lines) {
-            drawString(g,line, x2, y2);
-            y2 += s16;
-        }
-    }
-    private void drawUnknownTechnologyLists(Graphics2D g, Empire emp, int x, int y, int w, int h) {
-        g.setColor(RacesUI.darkBrown);
-        g.fillRect(x, y, w, h);
-        int w1 = (w-s20)/3;
-        int h1 = h/2;
-        
-        int x1 = x+s10;
-        int x2 = x1+w1;
-        int x3 = x2+w1;
-        int y1 = y;
-        int y2 = y+h1;
-        
-        Empire pl = player();
-        TechTree tree = emp == pl ? pl.tech() : pl.viewForEmpire(emp).spies().tech();
-        drawJnknownTechCategory(g, emp, tree.computer(),    0, x1, y1, w1, h1);
-        drawJnknownTechCategory(g, emp, tree.construction(),1, x2, y1, w1, h1);
-        drawJnknownTechCategory(g, emp, tree.forceField(),  2, x3, y1, w1, h1);
-        drawJnknownTechCategory(g, emp, tree.planetology(), 3, x1, y2, w1, h1);
-        drawJnknownTechCategory(g, emp, tree.propulsion(),  4, x2, y2, w1, h1);
-        drawJnknownTechCategory(g, emp, tree.weapon(),      5, x3, y2, w1, h1);   
-    }
-    private void drawTechnologyLists(Graphics2D g, Empire emp, int x, int y, int w, int h) {
-        g.setColor(RacesUI.darkBrown);
-        g.fillRect(x, y, w, h);
-        int w1 = (w-s20)/3;
-        int h1 = h/2;
-        
-        int x1 = x+s10;
-        int x2 = x1+w1;
-        int x3 = x2+w1;
-        int y1 = y;
-        int y2 = y+h1;
-        
-        Empire pl = player();
-        TechTree tree = emp == pl ? pl.tech() : pl.viewForEmpire(emp).spies().tech();
-        drawTechCategory(g, emp, tree.computer(),    0, x1, y1, w1, h1);
-        drawTechCategory(g, emp, tree.construction(),1, x2, y1, w1, h1);
-        drawTechCategory(g, emp, tree.forceField(),  2, x3, y1, w1, h1);
-        drawTechCategory(g, emp, tree.planetology(), 3, x1, y2, w1, h1);
-        drawTechCategory(g, emp, tree.propulsion(),  4, x2, y2, w1, h1);
-        drawTechCategory(g, emp, tree.weapon(),      5, x3, y2, w1, h1);   
-    }
-    private void drawTechCategory(Graphics2D g, Empire emp, TechCategory cat, int num, int x, int y, int w, int h) {
-        g.setColor(SystemPanel.whiteText);
-        g.setFont(narrowFont(24));
-        String title = text(cat.id());
-        int sw = g.getFontMetrics().stringWidth(title);
-        int x0 = x+((w-sw)/2);
-        int y0 = y+s25;
-        drawShadowedString(g, title, 1, x0, y0, SystemPanel.blackText, SystemPanel.whiteText);
-    
-        int y1 = y0+s10;
-        int x1 = x+s10;
-        int w1 = w-s20;
-        int listH = y+h-y1-s10;
-        
-        g.setColor(RacesUI.brown);
-        g.fillRect(x1,y1,w1,listH);
-        
-        techBoxes[num].setBounds(x1,y1,w1,listH);
-        if (techBoxes[num] == hoverShape) {
-            Stroke prev = g.getStroke();
-            g.setStroke(stroke2);
-            g.setColor(Color.yellow);
-            g.draw(techBoxes[num]);
-            g.setStroke(prev);
-        }
-        List<String> aiUnknown = unknownTechs.get(cat.index());
-        List<String> aiKnown = knownTechs.get(cat.index());
-        
-        int rowH = s16;
-        int x2 = x1+s10;
-        int y2 = y1-techY[num];
-        g.setFont(narrowFont(15));
-        g.setClip(x1+s1,y1+s1,w1-s1,listH-s2);
-        g.setColor(SystemPanel.orangeText);
-        int rows = 0;
-        for (String id: aiUnknown) {
-            Tech t = tech(id);
-            if ((t.level() > 0) && !t.free) {
-                y2 += rowH;
-                rows++;
-                drawString(g,tech(id).name(), x2, y2);
-            }
-        }
-        g.setColor(SystemPanel.blackText);
-        for (String id: aiKnown) {
-            Tech t = tech(id);
-            if ((t.level() > 0) && !t.free) {
-                y2 += rowH;
-                rows++;
-                drawString(g,tech(id).name(), x2, y2);
-            }
-        }
-        techYMax[num] = max(0, s21+(rowH*rows) - listH);
-        if (techYMax[num] == 0) 
-            techScrollers[num].setBounds(0,0,0,0);
-        else {
-            g.setColor(RacesUI.scrollBarC);
-            int scrollW = s12;
-            int scrollH = (int) ((float)listH*listH/(listH+techYMax[num]));
-            int scrollX = x1+w1-scrollW-s2;
-            int scrollY =(int) (y1+ (float)listH*techY[num]/(techYMax[num]+listH));
-            g.fillRoundRect(scrollX, scrollY, scrollW, scrollH, s4, s4);
-            techScrollers[num].setBounds(scrollX, scrollY, scrollW, scrollH);
-            if (hoverShape == techScrollers[num]) {
-                Stroke prev = g.getStroke();
-                g.setColor(Color.yellow);
-                g.setStroke(stroke2);
-                g.drawRoundRect(scrollX, scrollY, scrollW, scrollH, s4, s4);
-                g.setStroke(prev);
-            }
-        }
-        g.setClip(null);
-    }
-    private void drawJnknownTechCategory(Graphics2D g, Empire emp, TechCategory cat, int num, int x, int y, int w, int h) {
-        g.setColor(SystemPanel.whiteText);
-        g.setFont(narrowFont(24));
-        String title = text(cat.id());
-        int sw = g.getFontMetrics().stringWidth(title);
-        int x0 = x+((w-sw)/2);
-        int y0 = y+s25;
-        drawShadowedString(g, title, 1, x0, y0, SystemPanel.blackText, SystemPanel.whiteText);
-    
-        int y1 = y0+s10;
-        int x1 = x+s10;
-        int w1 = w-s20;
-        int listH = y+h-y1-s10;
-        
-        g.setColor(RacesUI.brown);
-        g.fillRect(x1,y1,w1,listH);
-        
-        techBoxes[num].setBounds(x1,y1,w1,listH);
-        if (techBoxes[num] == hoverShape) {
-            Stroke prev = g.getStroke();
-            g.setStroke(stroke2);
-            g.setColor(Color.yellow);
-            g.draw(techBoxes[num]);
-            g.setStroke(prev);
-        }
-        
-        List<String> aiUnknown = unknownTechs.get(cat.index());
-        int rowH = s16;
-        int x2 = x1+s10;
-        int y2 = y1-techY[num];
-        g.setFont(narrowFont(15));
-        g.setClip(x1+s1,y1+s1,w1-s1,listH-s2);
-        g.setColor(SystemPanel.orangeText);
-        int rows = 0;
-        for (String id: aiUnknown) {
-            Tech t = tech(id);
-            if ((t.level() > 0) && !t.free) {
-                y2 += rowH;
-                rows++;
-                String s = tech(id).name();
-                drawString(g,s, x2, y2);
-                int sw1 = g.getFontMetrics().stringWidth(s)+s5;
-                List<Empire> emps = techOwners.get(id);
-                int x3 = x2 + sw1;
-                g.setColor(SystemPanel.blackText);
-                for (Empire emp1: emps) {
-                    s = emp1.raceName();
-                    sw1 = g.getFontMetrics().stringWidth(s)+s5;
-                    drawString(g,s, x3, y2);
-                    x3 += sw1;
-                }
-                g.setColor(SystemPanel.orangeText);
-            }
-        }
-        techYMax[num] = max(0, s21+(rowH*rows) - listH);
-        if (techYMax[num] == 0) 
-            techScrollers[num].setBounds(0,0,0,0);
-        else {
-            g.setColor(RacesUI.scrollBarC);
-            int scrollW = s12;
-            int scrollH = (int) ((float)listH*listH/(listH+techYMax[num]));
-            int scrollX = x1+w1-scrollW-s2;
-            int scrollY =(int) (y1+ (float)listH*techY[num]/(techYMax[num]+listH));
-            g.fillRoundRect(scrollX, scrollY, scrollW, scrollH, s4, s4);
-            techScrollers[num].setBounds(scrollX, scrollY, scrollW, scrollH);
-            if (hoverShape == techScrollers[num]) {
-                Stroke prev = g.getStroke();
-                g.setColor(Color.yellow);
-                g.setStroke(stroke2);
-                g.drawRoundRect(scrollX, scrollY, scrollW, scrollH, s4, s4);
-                g.setStroke(prev);
-            }
-        }
-        g.setClip(null);
     }
     private void drawPlayerIntelligenceBureau(Graphics2D g, Empire emp, int x, int y, int w, int h) {
         g.setColor(RacesUI.darkBrown);
@@ -929,90 +1087,15 @@ public final class RacesIntelligenceUI extends BasePanel implements MouseListene
             return oldValue != view.spies().allocation();
         }
     }
-    private void setValues() {
-        for (int i=0; i<techY.length; i++)
-            techY[i] = 0;
-        
-        Empire pl = player();
-        
-        inRange = pl.inRangeOfAnyEmpire();
-        if (parent.selectedEmpire().isPlayer()) {
-            internalSecurityCost = pl.empireInternalSecurityCost();
-            externalSpyingCost = pl.empireExternalSpyingCost();
-        }
-        else {
-            EmpireView view = pl.viewForEmpire(parent.selectedEmpire());
-            externalSpyingCost = pl.totalTaxablePlanetaryProduction() * view.spies().allocationCostPct() * view.owner().spySpendingModifier();
-        }
-        loadTechMaps();
-    }
-    private void loadTechMaps() {
-        knownTechs.clear();
-        unknownTechs.clear();
-        techOwners.clear();
-        Empire emp = parent.selectedEmpire();
-        if (emp.isPlayer()) 
-            loadAllUnknownTechs();
-        else
-            loadAllTechs(emp);
-    }
-    private void loadAllUnknownTechs() {
-        for (int i=0;i<TechTree.NUM_CATEGORIES;i++) {
-            knownTechs.put(i, new ArrayList<>());
-            unknownTechs.put(i, new ArrayList<>());
-        }
-        Empire pl = player();
-        TechTree plTree = pl.tech();
-        List<String> tradedTechs = new ArrayList<>();
-        for (String techId: pl.tech().tradedTechs())
-            tradedTechs.add(techId);
-        List<Empire> empires = pl.contactedEmpires();
-        for (Empire emp: empires) {
-            TechTree empTree = pl.viewForEmpire(emp).spies().tech();
-            for (int i=0;i<TechTree.NUM_CATEGORIES;i++) {
-                List<String> aiTechs = new ArrayList<>(empTree.category(i).knownTechs());
-                List<String> plTechs = new ArrayList<>(plTree.category(i).knownTechs());
-                aiTechs.removeAll(plTechs);
-                for (String id : aiTechs) {
-                    List<String> currUnknowns = unknownTechs.get(i);
-                    if (!currUnknowns.contains(id) && !tradedTechs.contains(id))
-                        currUnknowns.add(id);
-                    if (!techOwners.containsKey(id))
-                        techOwners.put(id, new ArrayList<>());
-                    techOwners.get(id).add(emp);
-                }
-            }        
-        }
-    }
-    private void loadAllTechs(Empire emp) {
-        Empire pl = player();
-        
-        TechTree empTree = pl.viewForEmpire(emp).spies().tech();
-        List<String> tradedTechs = new ArrayList<>();
-        for (String techId: pl.tech().tradedTechs())
-            tradedTechs.add(techId);
-        TechTree plTree = pl.tech();
-        for (int i=0;i<TechTree.NUM_CATEGORIES;i++) {
-            List<String> aiKnown = new ArrayList<>(empTree.category(i).knownTechs());
-            List<String> playerKnown = new ArrayList<>(plTree.category(i).knownTechs());
-            List<String> aiUnknown = new ArrayList<>();
-            for (String id : aiKnown) {
-                if (!playerKnown.contains(id) && !tradedTechs.contains(id))
-                    aiUnknown.add(id);
-            }
-            aiKnown.removeAll(aiUnknown);
-            Collections.sort(aiUnknown, Tech.REVERSE_LEVEL);
-            Collections.sort(aiKnown, Tech.REVERSE_LEVEL);
-            knownTechs.put(i, aiKnown);
-            unknownTechs.put(i, aiUnknown);
-        }
-    }
     private void openManageSpiesPane() {
         softClick();
         manageSpiesPane.init();
         enableGlassPane(manageSpiesPane);
         return;
     }
+
+    // --MOUSE----------------------------------
+
     @Override
     public void mouseWheelMoved(MouseWheelEvent e) {
         int x = e.getX();

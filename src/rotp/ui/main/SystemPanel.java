@@ -51,6 +51,8 @@ public abstract class SystemPanel extends BasePanel implements SystemViewer, Map
     public static final Color orangeClear = new Color(255,192,0,0);
     public static final Color blueText = new Color(34,140,142);
     public static final Color redText = new Color(153,0,11);
+    //public static final Color lightRedText = new Color(255,150,150);
+    public static final Color grassGreenText = new Color(0, 200, 0);
     public static final Color greenText = new Color(120, 147, 46);
     public static final Color limeText = new Color(176,242,90);
     public static final Color whiteText = new Color(210,210,210);

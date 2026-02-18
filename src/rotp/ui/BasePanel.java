@@ -357,7 +357,7 @@ public class BasePanel extends JPanel implements Base {
     public static int s81, s82, s83, s84, s85, s86, s87, s88, s89, s90;
     public static int s91, s92, s93, s94, s95, s96, s97, s98, s99, s100;
 
-    public static Stroke stroke1, stroke2, stroke3, stroke4, stroke5, stroke6, stroke7;
+    public static Stroke dashed, stroke1, stroke2, stroke3, stroke4, stroke5, stroke6, stroke7;
 
     public void loadScaledIntegers() {
         s1 = scaled(1); s2 = scaled(2); s3 = scaled(3); s4 = scaled(4); s5 = scaled(5); s6 = scaled(6); s7 = scaled(7); s8 = scaled(8); s9 = scaled(9); s10 = scaled(10);
@@ -371,6 +371,7 @@ public class BasePanel extends JPanel implements Base {
         s81 = scaled(81); s82 = scaled(82); s83 = scaled(83); s84 = scaled(84); s85 = scaled(85); s86 = scaled(86); s87 = scaled(87); s88 = scaled(88); s89 = scaled(89); s90 = scaled(90);
         s91 = scaled(91); s92 = scaled(92); s93 = scaled(93); s94 = scaled(94); s95 = scaled(95); s96 = scaled(96); s97 = scaled(97); s98 = scaled(98); s99 = scaled(99); s100 = scaled(100);
 
+        dashed = new BasicStroke(s1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{1}, 0);
         stroke1 = new BasicStroke(s1,BasicStroke.CAP_BUTT,BasicStroke.JOIN_BEVEL);
         stroke2 = new BasicStroke(s2,BasicStroke.CAP_BUTT,BasicStroke.JOIN_BEVEL);
         stroke3 = new BasicStroke(s3,BasicStroke.CAP_BUTT,BasicStroke.JOIN_BEVEL);
